@@ -890,6 +890,11 @@ ssize_t __mqtt_recv(struct mqtt_client *client)
           client->recv_buffer.curr -= consumed;
           client->recv_buffer.curr_sz += (unsigned long)consumed;
         }
+
+        /* Free up space by removing processed messages */
+        mqtt_mq_clean(&client->mq);
+        if(client->error == MQTT_ERROR_SEND_BUFFER_IS_FULL && client->mq.curr_sz > 0)
+            client->error = MQTT_OK;
     }
 
     /* In case there was some error handling the (well formed) message, we end up here */
