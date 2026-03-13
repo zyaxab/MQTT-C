@@ -1483,6 +1483,11 @@ ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz, unsigned int pac
     /* parse all subscriptions */
     va_start(args, packet_id);
     for(;;) {
+        if (num_subs >= MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
+            va_end(args);
+            return MQTT_ERROR_SUBSCRIBE_TOO_MANY_TOPICS;
+        }
+
         topic[num_subs] = va_arg(args, const char*);
         if (topic[num_subs] == NULL) {
             /* end of list */
@@ -1492,10 +1497,6 @@ ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz, unsigned int pac
         max_qos[num_subs] = (uint8_t) va_arg(args, unsigned int);
 
         ++num_subs;
-        if (num_subs >= MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
-            va_end(args);
-            return MQTT_ERROR_SUBSCRIBE_TOO_MANY_TOPICS;
-        }
     }
     va_end(args);
 
@@ -1564,6 +1565,11 @@ ssize_t mqtt_pack_unsubscribe_request(uint8_t *buf, size_t bufsz, unsigned int p
     /* parse all subscriptions */
     va_start(args, packet_id);
     for(;;) {
+        if (num_subs >= MQTT_UNSUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
+            va_end(args);
+            return MQTT_ERROR_UNSUBSCRIBE_TOO_MANY_TOPICS;
+        }
+
         topic[num_subs] = va_arg(args, const char*);
         if (topic[num_subs] == NULL) {
             /* end of list */
@@ -1571,10 +1577,6 @@ ssize_t mqtt_pack_unsubscribe_request(uint8_t *buf, size_t bufsz, unsigned int p
         }
 
         ++num_subs;
-        if (num_subs >= MQTT_UNSUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
-            va_end(args);
-            return MQTT_ERROR_UNSUBSCRIBE_TOO_MANY_TOPICS;
-        }
     }
     va_end(args);
 
