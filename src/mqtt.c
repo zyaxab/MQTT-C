@@ -1340,8 +1340,10 @@ ssize_t mqtt_pack_publish_request(uint8_t *buf, size_t bufsz,
     }
 
     /* pack payload */
-    memcpy(buf, application_message, application_message_size);
-    buf += application_message_size;
+    if (application_message_size > 0) {
+        memcpy(buf, application_message, application_message_size);
+        buf += application_message_size;
+    }
 
     return buf - start;
 }
