@@ -416,6 +416,75 @@ enum MQTTErrors mqtt_subscribe(struct mqtt_client *client,
     return MQTT_OK;
 }
 
+ssize_t mqtt_pack_subscribe_request_n(uint8_t *buf, size_t bufsz,
+                                      unsigned int packet_id,
+                                      const char *const *topic_names,
+                                      const uint8_t *max_qos_levels,
+                                      int num_topics)
+{
+    const uint8_t *const start = buf;
+    struct mqtt_fixed_header fixed_header;
+    ssize_t rv;
+    int i;
+
+    if (num_topics < 0 || num_topics > MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
+        return MQTT_ERROR_SUBSCRIBE_TOO_MANY_TOPICS;
+    }
+
+    fixed_header.control_type = MQTT_CONTROL_SUBSCRIBE;
+    fixed_header.control_flags = 2u;
+    fixed_header.remaining_length = 2u;
+    for (i = 0; i < num_topics; ++i) {
+        fixed_header.remaining_length += __mqtt_packed_cstrlen(topic_names[i]) + 1;
+    }
+
+    rv = mqtt_pack_fixed_header(buf, bufsz, &fixed_header);
+    if (rv <= 0) return 0;
+    buf += rv;
+    bufsz -= (size_t)rv;
+
+    if (bufsz < fixed_header.remaining_length) return 0;
+
+    buf += __mqtt_pack_uint16(buf, (uint16_t)packet_id);
+    for (i = 0; i < num_topics; ++i) {
+        buf += __mqtt_pack_str(buf, topic_names[i]);
+        *buf++ = max_qos_levels[i];
+    }
+
+    return buf - start;
+}
+
+enum MQTTErrors mqtt_subscribe_many(struct mqtt_client *client,
+                                    const char *const *topic_names,
+                                    const uint8_t *max_qos_levels,
+                                    int num_topics)
+{
+    ssize_t rv;
+    uint16_t packet_id;
+    struct mqtt_queued_message *msg;
+
+    if (num_topics <= 0 || num_topics > MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS) {
+        return MQTT_ERROR_SUBSCRIBE_TOO_MANY_TOPICS;
+    }
+
+    MQTT_PAL_MUTEX_LOCK(&client->mutex);
+    packet_id = __mqtt_next_pid(client);
+
+    MQTT_CLIENT_TRY_PACK(
+        rv, msg, client,
+        mqtt_pack_subscribe_request_n(
+            client->mq.curr, client->mq.curr_sz,
+            packet_id, topic_names, max_qos_levels, num_topics),
+        1
+    );
+
+    msg->control_type = MQTT_CONTROL_SUBSCRIBE;
+    msg->packet_id = packet_id;
+
+    MQTT_PAL_MUTEX_UNLOCK(&client->mutex);
+    return MQTT_OK;
+}
+
 enum MQTTErrors mqtt_unsubscribe(struct mqtt_client *client,
                          const char* topic_name)
 {
@@ -1480,11 +1549,7 @@ ssize_t mqtt_unpack_suback_response (struct mqtt_response *mqtt_response, const 
 /* SUBSCRIBE */
 ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz, unsigned int packet_id, ...) {
     va_list args;
-    const uint8_t *const start = buf;
-    ssize_t rv;
-    struct mqtt_fixed_header fixed_header;
     unsigned int num_subs = 0;
-    unsigned int i;
     const char *topic[MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS];
     uint8_t max_qos[MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS];
 
@@ -1508,40 +1573,8 @@ ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz, unsigned int pac
     }
     va_end(args);
 
-    /* build the fixed header */
-    fixed_header.control_type = MQTT_CONTROL_SUBSCRIBE;
-    fixed_header.control_flags = 2u;
-    fixed_header.remaining_length = 2u; /* size of variable header */
-    for(i = 0; i < num_subs; ++i) {
-        /* payload is topic name + max qos (1 byte) */
-        fixed_header.remaining_length += __mqtt_packed_cstrlen(topic[i]) + 1;
-    }
-
-    /* pack the fixed header */
-    rv = mqtt_pack_fixed_header(buf, bufsz, &fixed_header);
-    if (rv <= 0) {
-        return rv;
-    }
-    buf += rv;
-    bufsz -= (unsigned long)rv;
-
-    /* check that the buffer has enough space */
-    if (bufsz < fixed_header.remaining_length) {
-        return 0;
-    }
-    
-    
-    /* pack variable header */
-    buf += __mqtt_pack_uint16(buf, (uint16_t)packet_id);
-
-
-    /* pack payload */
-    for(i = 0; i < num_subs; ++i) {
-        buf += __mqtt_pack_str(buf, topic[i]);
-        *buf++ = max_qos[i];
-    }
-
-    return buf - start;
+    return mqtt_pack_subscribe_request_n(buf, bufsz, packet_id,
+                                         topic, max_qos, (int)num_subs);
 }
 
 /* UNSUBACK */
