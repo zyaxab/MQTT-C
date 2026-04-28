@@ -24,6 +24,9 @@ SOFTWARE.
 
 #include <mqtt.h>
 
+#include <stddef.h>
+#include <stdint.h>
+
 /** 
  * @file 
  * @brief Implements the functionality of MQTT-C.
@@ -1623,10 +1626,23 @@ ssize_t mqtt_pack_unsubscribe_request(uint8_t *buf, size_t bufsz, unsigned int p
 }
 
 /* MESSAGE QUEUE */
-void mqtt_mq_init(struct mqtt_message_queue *mq, void *buf, size_t bufsz) 
-{  
+void mqtt_mq_init(struct mqtt_message_queue *mq, void *buf, size_t bufsz)
+{
+    /* The queue grows downward from mem_end as an array of
+     * struct mqtt_queued_message. Round mem_end down to the struct's natural
+     * alignment so the writes inside the struct are always aligned,
+     * regardless of how the caller's byte buffer was placed. mem_start is
+     * left untouched — it only holds packed MQTT bytes.
+     *
+     * sizeof(void *) is used as a conservative C99-compatible stand-in for
+     * alignof(struct mqtt_queued_message): the struct contains only
+     * pointers, size_t, enums and uint16_t, none of which exceed pointer
+     * alignment on any supported target. */
+    uintptr_t end = (uintptr_t)buf + bufsz;
+    end &= ~(uintptr_t)(sizeof(void *) - 1);
+
     mq->mem_start = buf;
-    mq->mem_end = (uint8_t *)buf + bufsz;
+    mq->mem_end = (uint8_t *)end;
     mq->curr = (uint8_t *)buf;
     mq->queue_tail = (struct mqtt_queued_message *)mq->mem_end;
     mq->curr_sz = buf == NULL ? 0 : mqtt_mq_currsz(mq);

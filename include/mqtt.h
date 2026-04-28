@@ -926,6 +926,11 @@ enum MQTTQueuedMessageState {
 /**
  * @brief A message in a mqtt_message_queue.
  * @ingroup details
+ *
+ * @note mqtt_mq_init aligns mem_end down by sizeof(void *) so that the
+ *       array of these structs (which grows downward from mem_end) is
+ *       always naturally aligned. If a field wider than a pointer is added
+ *       here (e.g. double, long long, _Atomic), bump that mask accordingly.
  */
 struct mqtt_queued_message {
     /** @brief A pointer to the start of the message. */
