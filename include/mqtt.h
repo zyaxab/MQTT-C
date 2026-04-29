@@ -842,9 +842,29 @@ ssize_t mqtt_pack_pubxxx_request(uint8_t *buf, size_t bufsz,
  * @returns The number of bytes put into \p buf, 0 if \p buf is too small to fit the SUBSCRIBE 
  *          packet, a negative value if there was a protocol violation.
  */
-ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz, 
-                                    unsigned int packet_id, 
+ssize_t mqtt_pack_subscribe_request(uint8_t *buf, size_t bufsz,
+                                    unsigned int packet_id,
                                     ...); /* null terminated */
+
+/**
+ * @brief Serialize a SUBSCRIBE packet with an array of topics.
+ * @ingroup packers
+ *
+ * @param[out] buf the buffer to put the SUBSCRIBE packet in.
+ * @param[in] bufsz the maximum number of bytes that can be put into \p buf.
+ * @param[in] packet_id the packet ID to be used.
+ * @param[in] topic_names array of topic name strings.
+ * @param[in] max_qos_levels array of maximum QOS levels, one per topic.
+ * @param[in] num_topics number of topics.
+ *
+ * @returns The number of bytes put into \p buf, 0 if \p buf is too small,
+ *          a negative value if there was a protocol violation.
+ */
+ssize_t mqtt_pack_subscribe_request_n(uint8_t *buf, size_t bufsz,
+                                      unsigned int packet_id,
+                                      const char *const *topic_names,
+                                      const uint8_t *max_qos_levels,
+                                      int num_topics);
 
 /** 
  * @brief The maximum number topics that can be subscribed to in a single call to 
@@ -1552,6 +1572,24 @@ ssize_t __mqtt_pubcomp(struct mqtt_client *client, uint16_t packet_id);
 enum MQTTErrors mqtt_subscribe(struct mqtt_client *client,
                                const char* topic_name,
                                int max_qos_level);
+
+/**
+ * @brief Subscribe to multiple topics in a single SUBSCRIBE packet.
+ * @ingroup api
+ *
+ * @pre mqtt_connect must have been called.
+ *
+ * @param[in,out] client The MQTT client.
+ * @param[in] topic_names Array of topic name strings.
+ * @param[in] max_qos_levels Array of maximum QOS levels, one per topic.
+ * @param[in] num_topics Number of topics to subscribe to.
+ *
+ * @returns \c MQTT_OK upon success, an \ref MQTTErrors otherwise.
+ */
+enum MQTTErrors mqtt_subscribe_many(struct mqtt_client *client,
+                                    const char *const *topic_names,
+                                    const uint8_t *max_qos_levels,
+                                    int num_topics);
 
 /**
  * @brief Unsubscribe from a topic.

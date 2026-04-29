@@ -402,6 +402,45 @@ static void TEST__framing__subscribe(void** state) {
     assert_true(memcmp(buf, correct, 25) == 0);
 }
 
+static void TEST__framing__subscribe_n(void** state) {
+    uint8_t buf_varargs[256];
+    uint8_t buf_array[256];
+    ssize_t rv_varargs, rv_array;
+
+    const char *topics[] = {"a/b", "bbb/x", "c/dd"};
+    const uint8_t qos[] = {0, 1, 0};
+
+    /* both functions should produce identical output */
+    rv_varargs = mqtt_pack_subscribe_request(buf_varargs, 256, 132, "a/b", 0, "bbb/x", 1, "c/dd", 0, NULL);
+    rv_array = mqtt_pack_subscribe_request_n(buf_array, 256, 132, topics, qos, 3);
+
+    assert_true(rv_varargs == rv_array);
+    assert_true(memcmp(buf_varargs, buf_array, rv_varargs) == 0);
+
+    /* single topic */
+    rv_varargs = mqtt_pack_subscribe_request(buf_varargs, 256, 50, "test/topic", 2, NULL);
+    rv_array = mqtt_pack_subscribe_request_n(buf_array, 256, 50,
+        (const char *const[]){"test/topic"}, (const uint8_t[]){2}, 1);
+    assert_true(rv_varargs == rv_array);
+    assert_true(memcmp(buf_varargs, buf_array, rv_varargs) == 0);
+
+    /* buffer too small */
+    rv_array = mqtt_pack_subscribe_request_n(buf_array, 5, 132, topics, qos, 3);
+    assert_true(rv_array == 0);
+
+    /* too many topics */
+    const char *many_topics[MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS + 1];
+    uint8_t many_qos[MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS + 1];
+    int i;
+    for (i = 0; i <= MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS; ++i) {
+        many_topics[i] = "t";
+        many_qos[i] = 0;
+    }
+    rv_array = mqtt_pack_subscribe_request_n(buf_array, 256, 132,
+        many_topics, many_qos, MQTT_SUBSCRIBE_REQUEST_MAX_NUM_TOPICS + 1);
+    assert_true(rv_array == MQTT_ERROR_SUBSCRIBE_TOO_MANY_TOPICS);
+}
+
 static void TEST__framing__suback(void** state) {
     ssize_t rv;
     struct mqtt_response response;
@@ -995,6 +1034,7 @@ int main(int argc, const char *argv[]) {
         cmocka_unit_test(TEST__framing__publish),
         cmocka_unit_test(TEST__framing__pubxxx),
         cmocka_unit_test(TEST__framing__subscribe),
+        cmocka_unit_test(TEST__framing__subscribe_n),
         cmocka_unit_test(TEST__framing__suback),
         cmocka_unit_test(TEST__framing__unsubscribe),
         cmocka_unit_test(TEST__framing__unsuback),
